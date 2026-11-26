@@ -584,7 +584,195 @@ button.back-link { background: none; border: 0; cursor: pointer; font: inherit; 
 .trk-head--trips { padding: 16px 16px 6px; display: flex; flex-direction: column; gap: 12px; }
 .trk-head--trips h1 { font: 600 28px/1.2 var(--font-head); }
 .trk-head__row { display: flex; align-items: center; gap: 10px; }
-.trk-back { width: 36px; height: 44px; margin-left: -6px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink); }
+.trk-back { width: 36px; height: 44px; margin-left: -6px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink); border: 0; background: none; padding: 0; cursor: pointer; }
+
+/* ---------- Find loads (trucker) ----------
+   Ride-hailing look: a calm map, white cards, small type (12-15px), plenty of white space.
+   Step 1 is a full-screen map with a floating trip card and a truck sheet; steps 2-4 are plain white pages. */
+.round-btn {
+  width: 44px; height: 44px; flex: none; border: 0; border-radius: 50%; padding: 0;
+  background: var(--surface); color: var(--ink); box-shadow: 0 2px 10px rgba(29, 31, 26, 0.12);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+
+/* Step 1: the map */
+.find { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--surface); }
+.geo-map, .geo-map__canvas { position: absolute; inset: 0; }
+.geo-map__canvas { z-index: 0; background: #F2F2EF; }
+.find__top { position: absolute; top: 16px; left: 16px; right: 16px; z-index: 3; display: flex; align-items: flex-start; gap: 10px; }
+.find__bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; flex-direction: column; gap: 12px; }
+
+/* The trip card: two places joined by a dotted line, and the fastest route under them */
+.trip-card { flex: 1; min-width: 0; padding: 4px 14px 12px; background: var(--surface); border-radius: 16px; box-shadow: 0 6px 20px rgba(29, 31, 26, 0.1); }
+.trip-card__row {
+  position: relative; width: 100%; min-height: 44px; display: flex; align-items: center; gap: 12px;
+  padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.trip-card__row + .trip-card__row::before { content: ''; position: absolute; top: 0; left: 26px; right: 0; border-top: 1px solid var(--line); }
+.trip-card__row + .trip-card__row::after { content: ''; position: absolute; left: 6px; top: -14px; height: 7px; border-left: 2px dotted #B4B0A4; }
+.trip-card__place { min-width: 0; font: 600 14px/1.3 var(--font-head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trip-card__row:hover .trip-card__place { color: var(--green-dark); }
+.route-pill { margin: 6px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--green-soft); color: var(--muted); font-size: 12.5px; text-align: center; }
+.route-pill strong { color: var(--green-dark); font-weight: 600; }
+
+/* Start = rounded square, drop-off = triangle: the same marks on the map, the card and the trip times */
+.end-mark { position: relative; width: 14px; height: 14px; flex: none; display: inline-block; }
+.end-mark--start { border: 2px solid var(--ink); border-radius: 4px; }
+.end-mark--start::after { content: ''; position: absolute; inset: 2px; border-radius: 1px; background: var(--ink); }
+.end-mark--end { background: var(--orange); clip-path: polygon(0 10%, 100% 10%, 50% 95%); }
+.map-end {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+.map-end--truck { width: 34px; height: 34px; }
+.map-end i { display: block; }
+.map-end--start i { width: 11px; height: 11px; border-radius: 3px; background: var(--ink); }
+.map-end--end i { width: 12px; height: 11px; background: var(--orange); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+
+/* The pin stays in the middle while the map moves under it; it lifts while you drag */
+.center-pin { position: absolute; left: 50%; top: 50%; z-index: 2; width: 0; height: 0; pointer-events: none; }
+.center-pin__head, .center-pin__stem, .center-pin__label { position: absolute; transition: transform 0.15s ease-out, opacity 0.15s ease-out; }
+.center-pin__head {
+  left: -13px; bottom: 16px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--pin); border: 3px solid #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.28);
+}
+.center-pin__head::after { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: #fff; }
+.center-pin__stem { left: -1.5px; bottom: 0; width: 3px; height: 19px; border-radius: 2px; background: var(--pin); }
+.center-pin__shadow {
+  position: absolute; left: -6px; top: -2.5px; width: 12px; height: 5px; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.28); transition: transform 0.15s ease-out;
+}
+.center-pin__label {
+  left: 0; bottom: 50px; transform: translateX(-50%); white-space: nowrap;
+  padding: 5px 11px; border-radius: 999px; background: var(--ink); color: #fff;
+  font-size: 13px; font-weight: 600; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+.center-pin--start { --pin: var(--ink); }
+.center-pin--end { --pin: var(--orange); }
+.center-pin.is-moving .center-pin__head, .center-pin.is-moving .center-pin__stem { transform: translateY(-10px); }
+.center-pin.is-moving .center-pin__label { transform: translate(-50%, -10px); opacity: 0; }
+.center-pin.is-moving .center-pin__shadow { transform: scale(0.7); }
+@media (prefers-reduced-motion: reduce) {
+  .center-pin__head, .center-pin__stem, .center-pin__label, .center-pin__shadow { transition: none; }
+}
+
+.map-hint {
+  margin: 0 16px; display: flex; align-items: center; gap: 8px; padding: 2px 2px 2px 14px;
+  border-radius: 12px; background: var(--green-dark); color: #fff; font-size: 13px; font-weight: 500;
+  box-shadow: 0 4px 14px rgba(29, 31, 26, 0.16);
+}
+.map-hint__close {
+  width: 40px; height: 40px; flex: none; border: 0; border-radius: 10px;
+  background: transparent; color: #fff; font-size: 20px; line-height: 1; cursor: pointer;
+}
+.map-hint__close:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* The truck sheet */
+.find-sheet {
+  display: flex; flex-direction: column; gap: 14px; padding: 10px 20px 10px;
+  background: var(--surface); border-radius: 22px 22px 0 0; box-shadow: 0 -6px 20px rgba(29, 31, 26, 0.08);
+}
+.find-sheet__grabber { align-self: center; width: 36px; height: 4px; border-radius: 2px; background: var(--line); }
+.find-sheet__truck { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.plate {
+  align-self: flex-start; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(29, 31, 26, 0.08); font: 700 16px var(--font-head); letter-spacing: 0.5px;
+}
+.who-row { display: flex; align-items: center; gap: 12px; }
+.avatar {
+  width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--green); color: #fff;
+  font: 600 14px var(--font-head); display: flex; align-items: center; justify-content: center;
+}
+.who-row__name { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.who-row__sub { font-size: 12.5px; line-height: 1.3; color: var(--muted); }
+.pill-btn {
+  height: 40px; min-width: 104px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: 12px; background: var(--green); color: #fff;
+  font: 600 14px var(--font-body); text-decoration: none; cursor: pointer;
+}
+.pill-btn:hover { background: var(--green-dark); color: #fff; }
+.pill-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.pill-btn--outline { min-width: 0; padding: 0 14px; border-color: var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; }
+.pill-btn--outline:hover { background: #F6F6F2; color: var(--ink); }
+.map-credit { margin: 0; font-size: 11px; color: var(--muted); text-align: center; }
+
+/* Place search, over the map */
+.place-search { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--surface); }
+.place-search__bar { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
+.search-field {
+  flex: 1; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 14px;
+  border-radius: 12px; background: #F3F3EF; color: var(--muted);
+}
+.search-field:focus-within { box-shadow: 0 0 0 2px var(--green); }
+.search-field input { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: none; font: 400 15px var(--font-body); color: var(--ink); }
+.search-field__clear { width: 36px; height: 36px; flex: none; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+.place-search__list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; }
+.place-search__note { margin: 10px 0 16px; font-size: 13px; color: var(--muted); }
+.place-search__heading { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.place-list { margin: 0; padding: 0; list-style: none; }
+.place-row {
+  width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 8px 0;
+  border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.place-list li:last-child .place-row { border-bottom: 0; }
+.place-row--map { width: auto; margin: 0 16px; }
+.place-row__icon {
+  width: 32px; height: 32px; flex: none; border-radius: 50%; background: #F3F3EF; color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+}
+.place-row--map .place-row__icon { background: var(--green-soft); color: var(--green-dark); }
+.place-row__text { min-width: 0; display: flex; flex-direction: column; }
+.place-row__name { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.place-row__detail { font-size: 12.5px; line-height: 1.3; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.place-row:hover .place-row__name { color: var(--green-dark); }
+
+/* Steps 2 to 4: white pages */
+.find-page { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
+.find-head { display: flex; align-items: center; gap: 14px; padding: 16px 20px 8px; }
+.find-head h1 { font: 600 17px/1.3 var(--font-head); }
+.find-page__body { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 12px 20px 20px; display: flex; flex-direction: column; gap: 24px; }
+.find-page__foot { padding: 8px 20px 20px; }
+.find-note { margin: 0; font-size: 13px; color: var(--muted); }
+.find-label { margin: 0; font: 600 14px var(--font-head); }
+.route-thumb { position: relative; z-index: 0; flex: none; height: 160px; border-radius: 16px; overflow: hidden; background: #F2F2EF; }
+.route-thumb--wait { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+
+.trip-times { margin: 8px 0 0; padding: 0; list-style: none; }
+.trip-times li { position: relative; display: grid; grid-template-columns: 64px 14px minmax(0, 1fr); align-items: center; gap: 14px; min-height: 44px; }
+.trip-times li + li::before { content: ''; position: absolute; top: 0; left: 92px; right: 0; border-top: 1px solid var(--line); }
+.trip-times li:first-child::after { content: ''; position: absolute; left: 84px; top: calc(50% + 9px); height: calc(100% - 18px); border-left: 2px dotted #B4B0A4; }
+.trip-times__time { font-size: 13px; font-weight: 600; }
+.trip-times__place { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.kilos { display: flex; flex-direction: column; gap: 12px; }
+.kilo-stepper { display: flex; align-items: center; gap: 8px; padding: 4px; border: 1px solid var(--line); border-radius: 14px; }
+.kilo-stepper__btn {
+  width: 44px; height: 44px; flex: none; border: 0; border-radius: 10px;
+  background: transparent; color: var(--ink); font: 400 22px/1 var(--font-body); cursor: pointer;
+}
+.kilo-stepper__btn:hover { background: #F3F3EF; }
+.kilo-stepper__btn:disabled { opacity: 0.3; cursor: default; background: transparent; }
+.kilo-stepper__value { flex: 1; text-align: center; font: 600 17px var(--font-head); }
+
+.wide-btn {
+  width: 100%; height: 52px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: 14px; background: var(--green); color: #fff;
+  font: 600 15px var(--font-body); text-decoration: none; cursor: pointer;
+}
+.wide-btn:hover { background: var(--green-dark); color: #fff; }
+.wide-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.wide-btn--sm { height: 44px; border-radius: 12px; font-size: 14px; }
+.wide-btn--outline { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.wide-btn--outline:hover { background: #F6F6F2; color: var(--ink); }
+
+.route-card { flex: none; display: flex; flex-direction: column; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.route-card__crop { margin: 0; font: 600 15px var(--font-head); }
+.route-stats { margin: 0; display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; gap: 8px; }
+.route-stats dt { font-size: 12px; color: var(--muted); }
+.route-stats dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; }
+.find-done { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 12px 0; text-align: center; }
+.find-done h1 { margin-top: 6px; font: 600 20px/1.3 var(--font-head); }
+.find-done__check { width: 56px; height: 56px; border-radius: 50%; background: var(--green); color: #fff; display: flex; align-items: center; justify-content: center; }
 .see-more { align-self: flex-start; padding: 6px 0; }
 .request-row {
   width: 100%; display: flex; align-items: center; gap: 12px; padding: 0; border: 0; background: none;
@@ -714,3 +902,75 @@ button.back-link { background: none; border: 0; cursor: pointer; font: inherit; 
   .start__continue { order: 3; }
   .role-card { min-height: 140px; }
 }
+.wide-btn--soft { background: var(--green-soft); color: var(--green-dark); }
+.wide-btn--soft:hover { background: #DCEBD0; color: var(--green-dark); }
+.find-page .see-more { font-size: 14px; }
+
+/* ---------- Route details and the trip guide (trucker) ----------
+   Same quiet look as Find loads: small type, white cards, one green action per screen. */
+.route-thumb--tall { height: 190px; }
+.stop-list { margin: 0; padding: 0; list-style: none; }
+.stop-list li { position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 0; }
+.stop-list li + li { border-top: 1px solid var(--line); }
+.stop-list__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.stop-list__name { font-size: 14px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stop-list__kg { font-size: 14px; font-weight: 600; }
+.stop-dot {
+  width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--ink); color: #fff;
+  font: 600 12px var(--font-head); display: flex; align-items: center; justify-content: center;
+}
+.stop-dot--end { background: none; }
+.pay-row { display: flex; align-items: baseline; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--line); }
+.pay-row__amount { font: 600 22px var(--font-head); color: var(--green-dark); }
+
+/* Farm markers on the trip map */
+.map-stop {
+  width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); font: 600 12px var(--font-head);
+}
+.map-stop--later { background: #fff; color: var(--ink); border-color: var(--ink); }
+.map-stop--next { width: 32px; height: 32px; background: var(--orange); color: #fff; font-size: 14px; }
+.map-stop--done { background: var(--green); color: #fff; }
+
+/* The turn banner across the top of the trip guide */
+.turn-banner {
+  flex: 1; min-width: 0; min-height: 64px; display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  border-radius: 16px; background: var(--green-dark); color: #fff; box-shadow: 0 6px 20px rgba(29, 31, 26, 0.18);
+}
+.turn-banner--here { background: var(--ink); }
+.turn-banner__icon { width: 30px; flex: none; display: flex; justify-content: center; }
+.turn-banner__text { min-width: 0; display: flex; flex-direction: column; }
+.turn-banner__dist { font: 600 18px/1.2 var(--font-head); }
+.turn-banner__what { font-size: 13px; line-height: 1.35; opacity: 0.92; }
+
+/* The trip guide sheet */
+.trip-sheet { gap: 12px; }
+.trip-dots { display: flex; align-items: center; gap: 6px; }
+.trip-dots__dot { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.trip-dots__dot.is-done { background: var(--green); }
+.trip-dots__dot.is-now { background: var(--orange); }
+.trip-sheet__head { display: flex; align-items: flex-start; gap: 12px; }
+.trip-sheet__eyebrow { font-size: 12px; font-weight: 600; color: var(--orange-text); }
+.trip-sheet__name { margin: 2px 0; font: 600 17px/1.3 var(--font-head); }
+.trip-progress { height: 6px; border-radius: 3px; background: var(--green-soft); overflow: hidden; }
+.trip-progress span { display: block; height: 100%; border-radius: 3px; background: var(--green); }
+.nav-apps { display: flex; align-items: center; gap: 8px; }
+.nav-apps .pill-btn { height: 36px; }
+
+/* Slide to confirm */
+.slide { position: relative; height: 56px; border-radius: 16px; background: var(--green-soft); overflow: hidden; user-select: none; }
+.slide__fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 16px; background: #CFE4BE; }
+.slide__label {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding-left: 40px;
+  font-size: 14px; font-weight: 600; color: var(--green-dark); pointer-events: none;
+}
+.slide__knob {
+  position: absolute; left: 4px; top: 4px; width: 48px; height: 48px; border: 0; border-radius: 12px;
+  background: var(--green); color: #fff; display: flex; align-items: center; justify-content: center;
+  cursor: grab; touch-action: none; transition: transform 0.2s ease-out;
+}
+.slide__knob.is-dragging { cursor: grabbing; transition: none; }
+@media (prefers-reduced-motion: reduce) { .slide__knob { transition: none; } }
+.slide-ask { display: flex; flex-direction: column; gap: 10px; }
+.slide-ask__q { margin: 0; font-size: 14px; font-weight: 600; }
+.slide-ask__btns { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }

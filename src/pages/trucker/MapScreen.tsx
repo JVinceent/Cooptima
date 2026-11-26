@@ -1,181 +1,413 @@
-import { useState } from 'react'
-import { Button } from '../../components/Button'
-import { MapArt, routePoints, routeStops, routeToBuyer } from '../../components/MapArt'
-import { onMyWayKm, sample, totals, truckerPay, truckerRequests } from '../../data/sample'
-import { kg, peso } from '../../format'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { Icon } from '../../components/Icon'
+import { Mascot } from '../../components/AssistantTip'
+import { MAP_CREDIT, PinMap, RouteThumb, type End } from '../../components/GeoMap'
+import { RoundBack } from '../../components/RoundBack'
+import { useChosen } from '../../chosen'
+import { RouteDetails } from './RouteDetails'
+import { loadRoutes, matchKm, places, proposal, sample, truckerStart, type LoadRoute } from '../../data/sample'
+import { kg, peso, weekdayDate } from '../../format'
+import {
+  clockAfter, distanceKm, duration, fastestRoute, placeName, searchPlaces, type Found, type LatLng, type RouteInfo,
+} from '../../geo'
 import { useT } from '../../i18n'
 
-// My truck sits between the last picked-up stop and the next one.
-const done = sample.truckerTrips.today.done
-const from = routeStops[Math.max(done - 1, 0)]
-const to = routeStops[Math.min(done, routeStops.length - 1)]
-const you = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
+const STEP_KG = 250 // the kilos stepper moves this much at a time
+const SHOWN = 2 // routes shown before "See more"
+const LEAVE_AT = sample.truckerTrips.newBooking.start // the usual start time (a placeholder)
+const SUGGESTED: Found[] = Object.values(places).map((p) => ({ ...p, detail: '' }))
 
-// My stops are white numbered circles (green check once picked up). Farmers asking for a truck are orange
-// lettered pins that match the letters in the list; tapping a pin or a row opens that request.
-// Adding one checks it against the truck's capacity, and added requests turn green.
+type Step = 1 | 2 | 3 | 'details' | 4
+type Spot = LatLng & { name: string } // name is '' while it is being looked up
+type SearchState = 'idle' | 'loading' | 'done' | 'error'
+const short = (name: string) => name.split(',')[0]
+const BackButton = RoundBack
+
+// "Find loads": 1) set where I start and where I'm going, by searching or by moving the pin, 2) say how many
+// kilos I can take, 3) pick one of the routes that qualify. Step 4 confirms it; the choice then shows on Home.
 export default function MapScreen() {
-  const { t, crop } = useT()
-  const [onMyWay, setOnMyWay] = useState(true)
-  const [selected, setSelected] = useState<string>()
-  const [added, setAdded] = useState<string[]>([])
-  const [declined, setDeclined] = useState<string[]>([])
+  const { t, date, crop } = useT()
+  const { chosen, setChosen } = useChosen()
+  const [step, setStep] = useState<Step>(1)
+  const [from, setFrom] = useState<Spot>(truckerStart.from)
+  const [to, setTo] = useState<Spot>(truckerStart.to)
+  const [active, setActive] = useState<End>('start') // the end the pin is setting
+  const [flights, setFlights] = useState(0) // bumps when the map should fly to a picked place
+  const [route, setRoute] = useState<RouteInfo>()
+  const [hint, setHint] = useState(true)
+  const limit = sample.trucker.capacityKg
+  const [maxKg, setMaxKg] = useState(limit)
+  const [showAll, setShowAll] = useState(false)
+  const [picked, setPicked] = useState<LoadRoute>() // the route whose details are open
+  const lookup = useRef<AbortController>()
 
-  const capacity = sample.trucker.capacityKg
-  const addedRequests = truckerRequests.filter((r) => added.includes(r.pin))
-  const loadKg = totals.kg + addedRequests.reduce((sum, r) => sum + r.kg, 0)
-  const open = truckerRequests.filter(
-    (r) => !added.includes(r.pin) && !declined.includes(r.pin) && (!onMyWay || r.detourKm <= onMyWayKm),
-  )
-  const current = open.find((r) => r.pin === selected) ?? open[0]
-  const others = open.filter((r) => r !== current)
-  const afterKg = current ? loadKg + current.kg : loadKg
-  const fits = afterKg <= capacity
-  const lastAdded = truckerRequests.find((r) => r.pin === added[added.length - 1])
+  // Search: which end it is for (closed when undefined), what was typed, and what came back
+  const [searching, setSearching] = useState<End>()
+  const [query, setQuery] = useState('')
+  const [found, setFound] = useState<Found[]>([])
+  const [searchState, setSearchState] = useState<SearchState>('idle')
 
-  const accept = () => {
-    if (!current) return
-    setAdded([...added, current.pin])
-    setSelected(undefined)
+  // The fastest road route between the two ends, worked out again whenever one moves
+  useEffect(() => {
+    const stop = new AbortController()
+    setRoute(undefined)
+    fastestRoute(from, to, stop.signal).then(setRoute, () => {})
+    return () => stop.abort()
+  }, [from.lat, from.lng, to.lat, to.lng])
+
+  // Search as the trucker types, a moment after they stop
+  useEffect(() => {
+    if (!searching || query.trim().length < 2) {
+      setSearchState('idle')
+      return
+    }
+    const stop = new AbortController()
+    setSearchState('loading')
+    const wait = setTimeout(() => {
+      searchPlaces(query, searching === 'start' ? from : to, stop.signal).then(
+        (list) => { setFound(list); setSearchState('done') },
+        () => { if (!stop.signal.aborted) setSearchState('error') },
+      )
+    }, 300)
+    return () => { clearTimeout(wait); stop.abort() }
+  }, [query, searching]) // the pins are only a hint for nearby results, so moving them doesn't search again
+
+  // The map stopped moving: the pin now marks a new spot for the end being set. Look up its name.
+  const settle = (spot: LatLng) => {
+    const current = active === 'start' ? from : to
+    if (distanceKm(spot, current) < 0.02) return // the map only flew to where the pin already was
+    const set = active === 'start' ? setFrom : setTo
+    set({ ...spot, name: '' })
+    lookup.current?.abort()
+    const stop = (lookup.current = new AbortController())
+    placeName(spot, stop.signal).then((name) => set({ ...spot, name }), () => {})
   }
-  const decline = () => {
-    if (!current) return
-    setDeclined([...declined, current.pin])
-    setSelected(undefined)
+
+  const openSearch = (end: End) => {
+    setSearching(end)
+    setQuery('')
+    setFound([])
+  }
+  const closeSearch = () => setSearching(undefined)
+  // Use a searched (or suggested) place for that end, and move the pin there
+  const pick = (place: Found) => {
+    lookup.current?.abort()
+    const spot = { lat: place.lat, lng: place.lng, name: place.name }
+    if (searching === 'start') setFrom(spot)
+    else setTo(spot)
+    setActive(searching!)
+    setFlights((n) => n + 1)
+    closeSearch()
+  }
+  const chooseOnMap = () => {
+    setActive(searching!)
+    setFlights((n) => n + 1)
+    closeSearch()
   }
 
-  return (
-    <>
-      <div className="trk-map">
-        <MapArt label={t.mapAria(routeStops.length)} top={-48} bottom={346}>
-          <polyline points={routePoints} fill="none" stroke="#FFFFFF" strokeWidth={4} strokeDasharray="8 7" strokeLinecap="round" />
+  const fitting = loadRoutes
+    .filter((r) => distanceKm(r.from, from) <= matchKm && distanceKm(r.to, to) <= matchKm && r.kg <= maxKg)
+    .sort((a, b) => a.pickupOn.localeCompare(b.pickupOn))
+  const hidden = fitting.length - SHOWN
+  const here: Step = (step === 4 && !chosen) || (step === 'details' && !picked) ? 3 : step
+  const ready = from.name !== '' && to.name !== ''
 
-          {routeStops.map((pt, i) =>
-            i < done ? (
-              <g key={`stop-${i}`}>
-                <circle cx={pt.x} cy={pt.y} r={17} fill="#3F8113" stroke="#FFFFFF" strokeWidth={3} />
-                <path d={`M${pt.x - 8} ${pt.y}l6 6 10-11`} fill="none" stroke="#FFFFFF" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
-              </g>
-            ) : (
-              <g key={`stop-${i}`}>
-                <circle cx={pt.x} cy={pt.y} r={17} fill="#FFFFFF" />
-                <text x={pt.x} y={pt.y + 6} className="map-num map-num--md" fill="#1D1F1A">{i + 1}</text>
-              </g>
-            ),
-          )}
-
-          {/* Buyer A, the end of the route */}
-          <circle cx={routeToBuyer.x} cy={routeToBuyer.y} r={9} fill="#1D1F1A" stroke="#FFFFFF" strokeWidth={3} />
-          <rect x={routeToBuyer.x - 96} y={routeToBuyer.y - 12} width={80} height={24} rx={12} fill="#1D1F1A" />
-          <text x={routeToBuyer.x - 56} y={routeToBuyer.y + 5} fill="#FFFFFF" fontSize={13} fontWeight={600} textAnchor="middle">{sample.buyerA}</text>
-
-          {/* Added requests are part of the trip now */}
-          {addedRequests.map((r) => (
-            <g key={r.pin}>
-              <circle cx={r.x} cy={r.y} r={16} fill="#3F8113" stroke="#FFFFFF" strokeWidth={3} />
-              <text x={r.x} y={r.y + 6} className="map-num map-num--md" fill="#FFFFFF">{r.pin}</text>
-            </g>
-          ))}
-
-          {/* Open requests: tap one to see it */}
-          {open.map((r) => {
-            const isCurrent = r === current
-            const pick = () => setSelected(r.pin)
-            return (
-              <g
-                key={r.pin}
-                role="button"
-                tabIndex={0}
-                aria-label={t.requestLabel(r.pin, crop(r.crop), kg(r.kg))}
-                style={{ cursor: 'pointer' }}
-                onClick={pick}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    pick()
-                  }
-                }}
-              >
-                {isCurrent && <circle cx={r.x} cy={r.y} r={24} fill="none" stroke="#FFFFFF" strokeWidth={3} />}
-                <circle cx={r.x} cy={r.y} r={16} fill="#DD5909" stroke="#FFFFFF" strokeWidth={3} />
-                <text x={r.x} y={r.y + 6} className="map-num map-num--md" fill="#FFFFFF">{r.pin}</text>
-              </g>
-            )
-          })}
-
-          {/* You */}
-          <circle cx={you.x} cy={you.y} r={10} fill="#1D1F1A" stroke="#FFFFFF" strokeWidth={3} />
-          <rect x={you.x - 20} y={you.y - 38} width={40} height={22} rx={11} fill="#1D1F1A" />
-          <text x={you.x} y={you.y - 23} fill="#FFFFFF" fontSize={13} fontWeight={600} textAnchor="middle">{t.you}</text>
-        </MapArt>
-        <span className="map-chip map-chip--dark map-chip--top">{t.stopsRequests(routeStops.length, open.length)}</span>
+  const truckRow = (action: ReactNode) => (
+    <div className="who-row">
+      <span className="avatar" aria-hidden="true">{sample.trucker.short}</span>
+      <div className="grow">
+        <div className="who-row__name">{sample.trucker.name}</div>
+        <div className="who-row__sub">{proposal.coopName}</div>
       </div>
+      {action}
+    </div>
+  )
 
-      <div className="trk-sheet">
-        <div className="stack-10">
-          <h2 className="h-sub">{t.askingForTruck}</h2>
-          <div className="row-gap-12 wrap" role="group" aria-label={t.allNearby}>
-            <button type="button" className="chip-btn" aria-pressed={onMyWay} onClick={() => setOnMyWay(true)}>
-              {t.onMyWay(sample.buyerA)}
-            </button>
-            <button type="button" className="chip-btn" aria-pressed={!onMyWay} onClick={() => setOnMyWay(false)}>
-              {t.allNearby}
-            </button>
+  const placeRow = (place: Found, onClick: () => void) => (
+    <li key={`${place.name}-${place.lat}`}>
+      <button type="button" className="place-row" onClick={onClick}>
+        <span className="place-row__icon"><Icon name="pin" size={18} /></span>
+        <span className="place-row__text">
+          <span className="place-row__name">{place.name}</span>
+          {place.detail && <span className="place-row__detail">{place.detail}</span>}
+        </span>
+      </button>
+    </li>
+  )
+
+  // 1. Where I start and where I'm going
+  if (here === 1) {
+    const endButton = (kind: End, spot: Spot) => (
+      <button
+        type="button"
+        className="trip-card__row"
+        aria-label={kind === 'start' ? t.startIs(spot.name || t.findingPlace) : t.endIs(spot.name || t.findingPlace)}
+        onClick={() => openSearch(kind)}
+      >
+        <span className={`end-mark end-mark--${kind}`} aria-hidden="true" />
+        <span className="trip-card__place">{spot.name || t.findingPlace}</span>
+      </button>
+    )
+
+    return (
+      <div className="find">
+        <PinMap
+          center={active === 'start' ? from : to}
+          focusKey={`${active}-${flights}`}
+          pin={{ kind: active, label: active === 'start' ? t.pinStart : t.pinEnd }}
+          other={{ at: active === 'start' ? to : from, kind: active === 'start' ? 'end' : 'start' }}
+          onSettle={settle}
+          label={active === 'start' ? t.mapSetStart : t.mapSetEnd}
+        />
+        <h1 className="sr-only">{t.whereTo}</h1>
+
+        <div className="find__top">
+          <BackButton to="/trucker" label={t.back} />
+          <div className="trip-card">
+            {endButton('start', from)}
+            {endButton('end', to)}
+            <p className="route-pill" aria-live="polite">
+              {route ? (
+                <>
+                  {route.estimated ? t.aboutRoute : t.fastestRoute}{' '}
+                  <strong>{duration(route.minutes)} ({Math.round(route.km)} km)</strong>
+                </>
+              ) : (
+                t.findingRoute
+              )}
+            </p>
           </div>
         </div>
 
-        {lastAdded && (
-          <p className="green-text strong">
-            {t.added(crop(lastAdded.crop), kg(lastAdded.kg), kg(loadKg), kg(capacity))}
-          </p>
-        )}
-
-        {current ? (
-          <section aria-label={t.requestLabel(current.pin, crop(current.crop), kg(current.kg))} className="peach-card">
-            <div className="row-gap-12">
-              <span className="num-dot num-dot--sm num-dot--solid-orange">{current.pin}</span>
-              <div>
-                <div className="h-num h-num--sm">{crop(current.crop)}, {kg(current.kg)}</div>
-                <div className="muted small">{t.offRoute(current.farmer, current.detourKm)}</div>
+        <div className="find__bottom">
+          {hint && (
+            <div className="map-hint" role="status">
+              <span className="grow">{t.dragHint}</span>
+              <button type="button" className="map-hint__close" aria-label={t.close} onClick={() => setHint(false)}>
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+          )}
+          <section className="find-sheet" aria-label={t.myTruck}>
+            <span className="find-sheet__grabber" aria-hidden="true" />
+            <div className="find-sheet__truck">
+              <div className="stack-6">
+                <span className="plate">{sample.trucker.plate}</span>
+                <span className="who-row__sub">{t.truckUpTo(kg(limit))}</span>
               </div>
+              <Mascot name="truck" width={76} height={76} />
             </div>
-            <div className="pay-line">
-              <span className="h-num h-num--md">{peso(truckerPay.farmShare)}</span>
-              <span className="muted small">{t.payForFarm(sample.buyerA)}</span>
-            </div>
-            <p className={fits ? 'muted small' : 'hot-note small'}>
-              {fits ? t.loadAfter(kg(afterKg), kg(capacity)) : t.tooHeavy(kg(afterKg), kg(capacity))}
-            </p>
-            <div className="btn-row btn-row--phone">
-              <Button variant="secondary" size="lg" style={{ flex: 1, borderRadius: 12 }} onClick={decline}>{t.decline}</Button>
-              <Button size="lg" style={{ flex: 1.6, borderRadius: 12 }} disabled={!fits} onClick={accept}>{t.addToTrip}</Button>
-            </div>
+            {truckRow(
+              <button type="button" className="pill-btn" disabled={!ready} onClick={() => setStep(2)}>{t.next}</button>,
+            )}
+            <p className="map-credit">{MAP_CREDIT}</p>
           </section>
-        ) : (
-          <p className="muted">{added.length > 0 ? t.noMoreRequests : t.noRequests}</p>
-        )}
+        </div>
 
-        {others.length > 0 && (
-          <div className="stack-10">
-            <h3 className="h-sub">{t.moreNearby}</h3>
-            <ol aria-label={t.moreNearby} className="stops">
-              {others.map((r) => (
-                <li key={r.pin}>
-                  <button type="button" className="request-row" onClick={() => setSelected(r.pin)}>
-                    <span className="num-dot num-dot--sm num-dot--solid-orange">{r.pin}</span>
-                    <span className="grow">
-                      <span className="strong">{crop(r.crop)}, {kg(r.kg)}</span>
-                      <br />
-                      <span className="muted small">{t.offRoute(r.farmer, r.detourKm)}</span>
-                    </span>
-                    <span className="strong">{peso(truckerPay.farmShare)}</span>
+        {searching && (
+          <div
+            className="place-search"
+            role="dialog"
+            aria-modal="true"
+            aria-label={searching === 'start' ? t.searchStart : t.searchEnd}
+            onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
+          >
+            <div className="place-search__bar">
+              <BackButton onClick={closeSearch} label={t.back} />
+              <label className="search-field">
+                <Icon name="search" size={18} />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={searching === 'start' ? t.searchStart : t.searchEnd}
+                  aria-label={searching === 'start' ? t.searchStart : t.searchEnd}
+                  enterKeyHint="search"
+                />
+                {query && (
+                  <button type="button" className="search-field__clear" aria-label={t.clearSearch} onClick={() => setQuery('')}>
+                    <span aria-hidden="true">×</span>
                   </button>
-                </li>
-              ))}
-            </ol>
+                )}
+              </label>
+            </div>
+
+            <button type="button" className="place-row place-row--map" onClick={chooseOnMap}>
+              <span className="place-row__icon"><Icon name="map" size={18} /></span>
+              <span className="place-row__name">{t.chooseOnMap}</span>
+            </button>
+
+            <div className="place-search__list" aria-live="polite">
+              {query.trim().length < 2 ? (
+                <>
+                  <p className="place-search__note">{t.searchExample}</p>
+                  <h2 className="place-search__heading">{t.suggested}</h2>
+                  <ul className="place-list">{SUGGESTED.map((p) => placeRow(p, () => pick(p)))}</ul>
+                </>
+              ) : searchState === 'loading' || searchState === 'idle' ? (
+                <p className="place-search__note">{t.searching}</p>
+              ) : searchState === 'error' ? (
+                <p className="place-search__note">{t.searchFailed}</p>
+              ) : found.length === 0 ? (
+                <p className="place-search__note">{t.noPlaces}</p>
+              ) : (
+                <ul className="place-list">{found.map((p) => placeRow(p, () => pick(p)))}</ul>
+              )}
+            </div>
           </div>
         )}
       </div>
-    </>
+    )
+  }
+
+  // 2. The trip, and how many kilos I can take
+  if (here === 2) {
+    return (
+      <div className="find-page">
+        <header className="find-head">
+          <BackButton onClick={() => setStep(1)} label={t.back} />
+          <h1>{t.yourTrip}</h1>
+        </header>
+
+        <main className="find-page__body">
+          {route ? (
+            <RouteThumb from={from} to={to} line={route.line} label={t.routeMapAria(from.name, to.name)} />
+          ) : (
+            <div className="route-thumb route-thumb--wait">{t.findingRoute}</div>
+          )}
+
+          <section aria-label={t.yourTrip}>
+            <p className="find-note">{t.ifYouLeave(LEAVE_AT)}</p>
+            <ol className="trip-times">
+              <li>
+                <span className="trip-times__time">{LEAVE_AT}</span>
+                <span className="end-mark end-mark--start" aria-hidden="true" />
+                <span className="trip-times__place">{from.name}</span>
+              </li>
+              <li>
+                <span className="trip-times__time">{route ? clockAfter(LEAVE_AT, route.minutes) : '…'}</span>
+                <span className="end-mark end-mark--end" aria-hidden="true" />
+                <span className="trip-times__place">{to.name}</span>
+              </li>
+            </ol>
+          </section>
+
+          <section className="kilos" aria-label={t.howMuch}>
+            <h2 className="find-label">{t.howMuch}</h2>
+            <div className="kilo-stepper" role="group" aria-label={t.howMuch}>
+              <button type="button" className="kilo-stepper__btn" aria-label={t.lessKg} disabled={maxKg <= STEP_KG} onClick={() => setMaxKg(maxKg - STEP_KG)}>
+                <span aria-hidden="true">−</span>
+              </button>
+              <output className="kilo-stepper__value" aria-live="polite">{kg(maxKg)}</output>
+              <button type="button" className="kilo-stepper__btn" aria-label={t.moreKg} disabled={maxKg >= limit} onClick={() => setMaxKg(maxKg + STEP_KG)}>
+                <span aria-hidden="true">+</span>
+              </button>
+            </div>
+            <p className="between find-note">
+              <span className={fitting.length > 0 ? 'green-text strong' : 'hot-note'} aria-live="polite">
+                {fitting.length > 0 ? t.routesFit(fitting.length) : t.noneFit}
+              </span>
+              <span>{t.truckLimit(kg(limit))}</span>
+            </p>
+          </section>
+
+          {truckRow(<Link to="/trucker/profile" className="pill-btn pill-btn--outline">{t.seeProfile}</Link>)}
+        </main>
+
+        <div className="find-page__foot">
+          <button type="button" className="wide-btn" disabled={fitting.length === 0} onClick={() => { setShowAll(false); setStep(3) }}>
+            {t.showRoutes}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // 3 and 4: the routes that qualify, then the one I chose
+  const card = (r: LoadRoute, action?: ReactNode) => (
+    <section key={r.id} aria-label={`${crop(r.crop)}, ${kg(r.kg)}`} className="route-card">
+      <div className="between baseline">
+        <h2 className="route-card__crop">{crop(r.crop)}</h2>
+        <span className="find-note">{t.pickupOn(date(weekdayDate(r.pickupOn)))}</span>
+      </div>
+      {here === 4 && <p className="find-note">{short(r.from.name)} → {short(r.to.name)}</p>}
+      <dl className="route-stats">
+        <div><dt>{t.farmsLabel}</dt><dd>{r.farms}</dd></div>
+        <div><dt>{t.weightLabel}</dt><dd>{kg(r.kg)}</dd></div>
+        <div><dt>{t.distanceLabel}</dt><dd>{r.km} km</dd></div>
+        <div><dt>{t.payLabel}</dt><dd className="green-text">{peso(r.pay)}</dd></div>
+      </dl>
+      {action}
+    </section>
+  )
+
+  if (here === 3) {
+    return (
+      <div className="find-page">
+        <header className="find-head">
+          <BackButton onClick={() => setStep(2)} label={t.back} />
+          <div>
+            <h1>{t.routesForYou}</h1>
+            <p className="find-note">{t.routesTo(short(from.name), short(to.name), kg(maxKg))}</p>
+          </div>
+        </header>
+        <main className="find-page__body">
+          {fitting.length === 0 ? (
+            <>
+              <p className="find-note">{t.noRoutes}</p>
+              <button type="button" className="wide-btn wide-btn--outline" onClick={() => setStep(1)}>{t.changeSearch}</button>
+            </>
+          ) : (
+            <>
+              {(showAll ? fitting : fitting.slice(0, SHOWN)).map((r) =>
+                card(r, <button type="button" className="wide-btn wide-btn--sm wide-btn--soft" onClick={() => { setPicked(r); setStep('details') }}>{t.chooseRoute}</button>),
+              )}
+              {hidden > 0 && (
+                <button type="button" className="link-btn strong see-more" aria-expanded={showAll} onClick={() => setShowAll((open) => !open)}>
+                  {showAll ? t.seeLess : t.seeMore(hidden)}
+                </button>
+              )}
+            </>
+          )}
+        </main>
+      </div>
+    )
+  }
+
+  // Between the list and "Route confirmed": the whole trip, farm by farm
+  if (here === 'details' && picked) {
+    return (
+      <RouteDetails
+        route={picked}
+        onBack={() => setStep(3)}
+        onConfirm={() => {
+          setChosen(picked)
+          setStep(4)
+        }}
+      />
+    )
+  }
+
+  return (
+    <div className="find-page">
+      <header className="find-head">
+        <BackButton to="/trucker" label={t.back} />
+      </header>
+      {chosen && (
+        <main className="find-page__body">
+          <div className="find-done">
+            <span className="find-done__check"><Icon name="check" size={28} strokeWidth={2.4} /></span>
+            <h1>{t.routeChosen}</h1>
+            <p className="find-note">{t.chosenTold(chosen.farms)}</p>
+          </div>
+          {card(chosen)}
+          <div className="stack-10">
+            <Link to="/trucker/go" className="wide-btn">{t.startTrip}</Link>
+            <Link to="/trucker" className="wide-btn wide-btn--outline">{t.viewTrips}</Link>
+          </div>
+        </main>
+      )}
+    </div>
   )
 }
