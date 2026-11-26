@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Icon, type IconName } from '../components/Icon'
 import { PhoneFrame } from '../components/PhoneFrame'
+import { ChosenProvider } from '../chosen'
 import { proposal, sample } from '../data/sample'
 import { LangProvider, useT } from '../i18n'
 
@@ -14,7 +15,7 @@ function BackButton({ to }: { to: string }) {
   )
 }
 
-function CallButton() {
+export function CallButton() {
   const { t } = useT()
   return (
     <button type="button" className="call-btn call-btn--sm" aria-label={t.callCoop}>
@@ -27,7 +28,9 @@ function CallButton() {
 export function TruckerLayout() {
   return (
     <LangProvider>
-      <TruckerShell />
+      <ChosenProvider>
+        <TruckerShell />
+      </ChosenProvider>
     </LangProvider>
   )
 }
@@ -42,7 +45,10 @@ function TruckerShell() {
     { to: '/trucker/profile', label: t.tabProfile, icon: 'user' },
   ]
   const { pathname } = useLocation()
-  const inTrip = pathname === '/trucker/today' || pathname === '/trucker/dropoff'
+  // Tabs hide during a trip, and on Find loads and the trip guide where the map takes the whole screen
+  // (those draw their own back button)
+  const ownScreen = pathname === '/trucker/map' || pathname === '/trucker/go'
+  const inTrip = pathname === '/trucker/today' || pathname === '/trucker/dropoff' || ownScreen
 
   let header
   if (pathname === '/trucker/today') {
@@ -66,18 +72,8 @@ function TruckerShell() {
         </Link>
       </header>
     )
-  } else if (pathname === '/trucker/map') {
-    header = (
-      <header className="trk-head trk-head--today">
-        <BackButton to="/trucker" />
-        <img src="/assets/logo-mark.png" alt="Cooptima" className="trk-head__logo" />
-        <div className="trk-head__text">
-          <div className="trk-head__title">{t.map}</div>
-          <div className="trk-head__sub">{t.mapSub}</div>
-        </div>
-        <CallButton />
-      </header>
-    )
+  } else if (ownScreen) {
+    header = null // Find loads and the trip guide draw their own header and back button
   } else {
     header = (
       <header className="trk-head trk-head--trips">

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useChosen } from '../../chosen'
 import { Mascot } from '../../components/AssistantTip'
 import { Button } from '../../components/Button'
 import { Icon } from '../../components/Icon'
@@ -13,6 +14,7 @@ const SHOWN = 2 // "Coming up" shows this many cards, then "See more"
 
 export default function Trips() {
   const { t, date, crop } = useT()
+  const { trip: confirmed } = useChosen()
   const trip = sample.truckerTrips
   const [showAll, setShowAll] = useState(false)
   const weekPay = truckerPay.perTrip * trip.week.trips
@@ -34,6 +36,29 @@ export default function Trips() {
       <StatusPill tone="ok" size="md">{t.onTheRoad}</StatusPill>
       <Icon name="next" size={20} strokeWidth={2} />
     </Link>,
+    // The route confirmed in Find loads sits right under today's trip; it opens the trip guide until it's delivered
+    ...(confirmed
+      ? [
+          confirmed.status === 'done' ? (
+            <div key="chosen" className="trip-row">
+              <div className="grow">
+                <div className="strong">{date(weekdayDate(confirmed.route.pickupOn))}</div>
+                <div className="muted">{t.farmsAndLoad(crop(confirmed.route.crop), confirmed.route.farms, kg(confirmed.route.kg))}</div>
+              </div>
+              <StatusPill size="md">{t.delivered}</StatusPill>
+            </div>
+          ) : (
+            <Link key="chosen" to="/trucker/go" className="trip-row">
+              <div className="grow">
+                <div className="strong">{date(weekdayDate(confirmed.route.pickupOn))}</div>
+                <div className="muted">{t.farmsAndLoad(crop(confirmed.route.crop), confirmed.route.farms, kg(confirmed.route.kg))}</div>
+              </div>
+              <StatusPill tone="ok" size="md">{confirmed.status === 'driving' ? t.onTheRoad : t.booked}</StatusPill>
+              <Icon name="next" size={20} strokeWidth={2} />
+            </Link>
+          ),
+        ]
+      : []),
     <div key="upcoming" className="trip-row">
       <div className="grow">
         <div className="strong">{date(trip.upcoming.label)}</div>

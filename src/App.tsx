@@ -31,6 +31,7 @@ import TodayTrip from './pages/trucker/TodayTrip'
 import Dropoff from './pages/trucker/Dropoff'
 import MapScreen from './pages/trucker/MapScreen'
 import Profile from './pages/trucker/Profile'
+import TripGuide from './pages/trucker/TripGuide'
 
 export default function App() {
   return (
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="dropoff" element={<Dropoff />} />
         <Route path="map" element={<MapScreen />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="go" element={<TripGuide />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -142,15 +142,6 @@ export const totals = {
 // the farms share (P800 x 5 farms). Payout timing is unknown, so no screen states one.
 export const truckerPay = { perTrip: truckTotal, farmShare: proposal.truckShare, farms: proposal.farmsPerTruck }
 
-// Trucker "Map": farmers asking for a truck near the route to the buyer. SAMPLE placeholders. Assumed to be coop
-// members and to pay the usual per-farm share (UNCONFIRMED). x and y place the pin on the drawn map (MapArt).
-export const onMyWayKm = 3 // "on my way" means a detour of this many km or less
-export const truckerRequests = [
-  { pin: 'A', farmer: 'Mang Rodel', crop: 'Ampalaya', kg: 300, detourKm: 1.2, x: 222, y: 118 },
-  { pin: 'B', farmer: 'Aling Nena', crop: 'Sitaw', kg: 450, detourKm: 2.5, x: 405, y: 195 },
-  { pin: 'C', farmer: 'Mang Ben', crop: 'Talong', kg: 180, detourKm: 6, x: 350, y: 52 },
-]
-
 // The shared workflow spine: one harvest lot moves through these stages. Each role reads the same `stage`.
 // The stage ids are defined in src/workflow.ts. The tomato lot is at 'offer' in this mockup (Nov 25):
 // the forecast alert is out, the buyer has offered, and the manager still has to OK the truck and the buyer.
@@ -271,6 +262,65 @@ export const buyerFarmers: BuyerFarmer[] = [
   ...otherFarms.map((f) => ({ ...f, id: `${f.crop}-0`, coop: proposal.coopName, distanceKm: kmFromBuyer(f.x, f.y) })),
 ].sort((a, b) => a.distanceKm - b.distanceKm)
 export const buyerCrops = [...new Set(buyerFarmers.map((f) => f.crop))]
+
+// Trucker "Find loads": the trucker pins where he is and where he is going on a real map, says how many kilos he can
+// carry, and is shown the pools of farms that qualify. SAMPLE placeholders: the pools, their km, and the Sitaw/Talong/
+// mixed pools (Squash and Pechay take kg and pickup day from the farm records above). The places are real towns, at
+// their town centres. Pay uses the same UNCONFIRMED assumption as truckerPay: the usual share for every farm in the pool.
+export type Place = { name: string; lat: number; lng: number }
+export const places = {
+  sanPedro: { name: 'San Pedro, Laguna', lat: 14.3595, lng: 121.0473 },
+  binan: { name: 'Biñan, Laguna', lat: 14.3333, lng: 121.0833 },
+  calamba: { name: 'Calamba, Laguna', lat: 14.2117, lng: 121.1653 },
+  manila: { name: 'Manila', lat: 14.5995, lng: 120.9842 },
+  quezonCity: { name: 'Quezon City', lat: 14.676, lng: 121.0437 },
+  cavite: { name: 'Cavite', lat: 14.4791, lng: 120.897 },
+  divisoria: { name: 'Divisoria, Manila', lat: 14.6045, lng: 120.9725 },
+  batangasMarket: { name: 'Batangas City Public Market', lat: 13.7569, lng: 121.0553 },
+} satisfies Record<string, Place>
+// Where the two pins start: the trucker at the coop's town, heading to Buyer A in Manila
+export const truckerStart = { from: places.sanPedro, to: places.manila }
+// A pool qualifies when its first pickup and its drop-off are each this close to the trucker's two pins
+export const matchKm = 6
+// One farm the truck picks up from on a route
+export type FarmStop = { farmer: string; kg: number; lat: number; lng: number }
+export type LoadRoute = {
+  id: string
+  from: Place // the town the trip starts from (the farms are around it)
+  to: Place
+  crop: string
+  stops: FarmStop[] // in pickup order
+  farms: number
+  kg: number
+  km: number // SAMPLE estimate for the list; the route details screen shows the real road distance
+  pay: number
+  pickupOn: string // ISO date of the first pickup
+}
+type Farm = { farmer: string; kg: number }
+const pool = (crop: string): Farm[] => cropSeasons.find((s) => s.crop === crop)!.farms.map((f) => ({ farmer: f.name, kg: f.kg }))
+const firstReady = (crop: string) => cropSeasons.find((s) => s.crop === crop)!.farms.map((f) => f.readyOn).sort()[0]
+// Farm gates sit 1 to 3 km around the starting town, in pickup order. SAMPLE spots, not real farm locations.
+const nearby = [[0.009, 0.011], [0.021, -0.004], [0.006, -0.017], [-0.012, 0.009]]
+const route = (id: string, from: Place, to: Place, crop: string, farms: Farm[], km: number, pickupOn: string): LoadRoute => ({
+  id, from, to, crop, km, pickupOn,
+  stops: farms.map((f, i) => ({ ...f, lat: from.lat + nearby[i][0], lng: from.lng + nearby[i][1] })),
+  farms: farms.length,
+  kg: farms.reduce((n, f) => n + f.kg, 0),
+  pay: farms.length * truckerPay.farmShare,
+})
+const { sanPedro, binan, calamba, manila, quezonCity, cavite, batangasMarket } = places
+// Farmer names: the mixed, Squash and Pechay pools use the farms above; the rest are SAMPLE names
+export const loadRoutes: LoadRoute[] = [
+  route('a', sanPedro, manila, 'Mixed vegetables', otherFarms.map((f) => ({ farmer: f.farmer, kg: f.kg })), 38, '2026-12-08'),
+  route('b', sanPedro, manila, 'Squash', pool('Squash'), 38, firstReady('Squash')),
+  route('c', sanPedro, manila, 'Pechay', pool('Pechay'), 38, firstReady('Pechay')),
+  route('d', sanPedro, quezonCity, 'Sitaw', [{ farmer: 'Mang Lito', kg: 400 }, { farmer: 'Aling Rosa', kg: 300 }], 45, '2026-12-10'),
+  route('e', binan, manila, 'Talong', [{ farmer: 'Mang Jun', kg: 350 }, { farmer: 'Aling Cora', kg: 250 }], 41, '2026-12-12'),
+  route('f', calamba, cavite, 'Pechay', [{ farmer: 'Mang Tony', kg: 500 }, { farmer: 'Aling Luz', kg: 400 }, { farmer: 'Mang Edgar', kg: 300 }], 56, '2026-12-15'),
+  route('g', sanPedro, batangasMarket, 'Ampalaya', [{ farmer: 'Mang Delfin', kg: 350 }, { farmer: 'Aling Merly', kg: 300 }], 79, '2026-12-09'),
+  route('h', sanPedro, batangasMarket, 'Talong', [{ farmer: 'Mang Caloy', kg: 270 }, { farmer: 'Aling Pining', kg: 250 }], 79, '2026-12-16'),
+  route('i', calamba, batangasMarket, 'Pechay', [{ farmer: 'Aling Tess', kg: 400 }, { farmer: 'Mang Nonoy', kg: 350 }, { farmer: 'Aling Baby', kg: 350 }], 58, '2026-12-11'),
+]
 
 // Ampalaya order (sample)
 export const ampalayaOrder = {
