@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trucker: drop-off</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&amp;family=Poppins:wght@600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2D6410}a:hover{color:#1F4A0A}
+button:focus-visible,a:focus-visible{outline:2px solid #3F8113;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #F5F3EC; color: #1D1F1A; font-family: 'DM Sans', system-ui, sans-serif; font-size: 16px; line-height: 1.45; overflow: hidden">
+
+  <header style="padding: 12px 8px; display: flex; align-items: center">
+    <a href="Trucker.dc.html" style="min-height: 44px; padding: 0 8px; display: flex; align-items: center; gap: 6px; font-weight: 600; text-decoration: none">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M15 5l-7 7 7 7"></path></svg>
+      Today's trip
+    </a>
+  </header>
+
+  <main style="flex: 1; padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 16px">
+    <section aria-label="Pickups done" style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 24px 12px 8px">
+      <span style="width: 64px; height: 64px; border-radius: 32px; background: #3F8113; display: flex; align-items: center; justify-content: center">
+        <svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" style="stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12l5 5 9-10"></path></svg>
+      </span>
+      <h1 style="margin: 8px 0 0; font-family: Poppins, sans-serif; font-weight: 600; font-size: 26px; line-height: 1.2">All 5 pickups done</h1>
+      <p style="margin: 0; color: #4A5045; font-size: 17px">About 3,450 kg on the truck</p>
+    </section>
+
+    <section aria-label="Drop-off" style="background: #FFFFFF; border: 1px solid #E4E1D7; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span style="width: 44px; height: 44px; border-radius: 12px; background: #1D1F1A; display: flex; align-items: center; justify-content: center; flex: none"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"></path></svg></span>
+        <div>
+          <div style="font-size: 15px; color: #4A5045">Drop-off</div>
+          <div style="font-family: Poppins, sans-serif; font-weight: 600; font-size: 21px; line-height: 1.25">Buyer A</div>
+        </div>
+      </div>
+      <button type="button" style="height: 50px; border-radius: 12px; border: 1px solid #8E8A7E; background: #FFFFFF; color: #1D1F1A; font: 600 16px 'DM Sans', sans-serif; cursor: pointer">Directions</button>
+    </section>
+
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 10px">
+      <button type="button" style="height: 56px; border-radius: 14px; border: 0; background: #3F8113; color: #FFFFFF; font: 600 18px 'DM Sans', sans-serif; cursor: pointer">Mark delivered</button>
+      <p style="margin: 0; color: #4A5045; font-size: 15px; text-align: center">The coop and Buyer A are told right away.</p>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

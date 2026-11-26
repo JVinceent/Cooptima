@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cooptima buyer: My orders</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&amp;family=Poppins:wght@600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2D6410}a:hover{color:#1F4A0A}
+button:focus-visible,a:focus-visible{outline:2px solid #3F8113;outline-offset:2px}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #F5F3EC; color: #1D1F1A; font-family: 'DM Sans', system-ui, sans-serif; font-size: 16px; line-height: 1.5">
+
+<header style="background: #FFFFFF; border-bottom: 1px solid #E4E1D7">
+  <div style="max-width: 1160px; margin: 0 auto; box-sizing: border-box; padding: 14px 32px; display: flex; flex-wrap: wrap; align-items: center; gap: 28px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <img src="/_blob/b9019360ff66cae91bc034586722a132" alt="" style="width: 28px; height: 31px; object-fit: contain">
+      <span style="font-family: Poppins, sans-serif; font-weight: 700; font-size: 20px"><span style="color: #207A21">Coo</span><span style="color: #DD5909">ptima</span></span>
+    </div>
+    <nav aria-label="Main" style="display: flex; gap: 4px; flex: 1">
+      <a href="Buyer.dc.html" style="padding: 8px 12px; border-radius: 8px; color: #1D1F1A; text-decoration: none">Harvest posts</a>
+      <a href="BuyerOrders.dc.html" aria-current="page" style="padding: 8px 12px; border-radius: 8px; background: #EAF3E2; color: #2D6410; font-weight: 600; text-decoration: none">My orders</a>
+    </nav>
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span style="width: 34px; height: 34px; border-radius: 17px; background: #1D1F1A; color: #FFFFFF; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center" aria-hidden="true">BA</span>
+      <span style="font-weight: 500">Buyer A</span>
+    </div>
+  </div>
+</header>
+
+<main style="max-width: 1160px; margin: 0 auto; box-sizing: border-box; padding: 32px 32px 48px; display: flex; flex-direction: column; gap: 24px">
+  <div>
+    <h1 style="margin: 0; font-family: Poppins, sans-serif; font-weight: 600; font-size: 32px; line-height: 1.2">My orders</h1>
+    <p style="margin: 4px 0 0; color: #4A5045; font-size: 17px">Each order from offer to delivery.</p>
+  </div>
+
+  <section aria-label="Orders" style="background: #FFFFFF; border: 1px solid #E4E1D7; border-radius: 16px; padding: 8px 28px">
+    <ul style="list-style: none; margin: 0; padding: 0">
+      <li style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 22px 0; border-bottom: 1px solid #E4E1D7">
+        <div style="flex: 1 1 320px; min-width: 0">
+          <div style="font-family: Poppins, sans-serif; font-weight: 600; font-size: 19px">Tomatoes from San Pedro MPC</div>
+          <div style="color: #4A5045">3,450 kg at ₱30/kg, ₱103,500. Pickup Mon, Dec 7.</div>
+        </div>
+        <span style="padding: 5px 12px; border-radius: 999px; background: #FCE6D8; color: #A33F00; font-weight: 600; font-size: 15px">Pay ₱7,000 deposit</span>
+        <a href="BuyerOrder.dc.html" style="height: 46px; padding: 0 22px; border-radius: 10px; background: #3F8113; color: #FFFFFF; font-weight: 600; text-decoration: none; display: flex; align-items: center">Open order</a>
+      </li>
+      <li style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 22px 0">
+        <div style="flex: 1 1 320px; min-width: 0">
+          <div style="font-family: Poppins, sans-serif; font-weight: 600; font-size: 19px">Ampalaya from Cooperative B</div>
+          <div style="color: #4A5045">1,200 kg at ₱60/kg, ₱72,000. Pickup week of Dec 14.</div>
+        </div>
+        <span style="padding: 5px 12px; border-radius: 999px; background: #F0EEE7; color: #4A5045; font-weight: 600; font-size: 15px">Waiting for the coop</span>
+        <a href="#" style="height: 44px; padding: 0 22px; border-radius: 10px; border: 1px solid #8E8A7E; background: #FFFFFF; color: #1D1F1A; font-weight: 600; text-decoration: none; display: flex; align-items: center">Open order</a>
+      </li>
+    </ul>
+  </section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
