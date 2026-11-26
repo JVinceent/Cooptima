@@ -17,6 +17,12 @@ import Farm from './pages/farmer/Farm'
 import Market from './pages/farmer/Market'
 import Chat from './pages/farmer/Chat'
 import Sms from './pages/farmer/Sms'
+import { TruckerLayout } from './layouts/TruckerLayout'
+import Trips from './pages/trucker/Trips'
+import TodayTrip from './pages/trucker/TodayTrip'
+import Dropoff from './pages/trucker/Dropoff'
+import MapScreen from './pages/trucker/MapScreen'
+import Profile from './pages/trucker/Profile'
 
 export default function App() {
   return (
@@ -41,6 +47,13 @@ export default function App() {
       </Route>
       <Route path="/farmer/sms" element={<Sms />} />
       <Route path="/farmer/chat" element={<Chat />} />
+      <Route path="/trucker" element={<TruckerLayout />}>
+        <Route index element={<Trips />} />
+        <Route path="today" element={<TodayTrip />} />
+        <Route path="dropoff" element={<Dropoff />} />
+        <Route path="map" element={<MapScreen />} />
+        <Route path="profile" element={<Profile />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
