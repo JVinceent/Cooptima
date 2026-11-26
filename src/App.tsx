@@ -1,9 +1,11 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import Start from './pages/Start'
 
 export default function App() {
   return (
     <Routes>
-      <Route path="*" element={<p>Cooptima</p>} />
+      <Route path="/" element={<Start />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
